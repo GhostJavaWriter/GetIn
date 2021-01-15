@@ -6,51 +6,66 @@
 //
 
 import UIKit
+import CoreData
 
 class GIStartTestVC: UIViewController {
-
-    var dictionaryModel = DictionaryModel()
     
-    let testView = UIView()
-    let questionView = UIView()
-    let questionLabel = UILabel()
-    let wordLabel = UILabel()
-    let counterLabel = UILabel()
-
-    let button1 = UIButton()
-    let button2 = UIButton()
-    let button3 = UIButton()
-    let button4 = UIButton()
+    var dictionary : [ListModel]?
+    var container : NSPersistentContainer?
+    var wordsInTest = 10
     
-    var questionArray = [WordModel]() {
+    private let testView = UIView()
+    private let questionView = UIView()
+    private let questionLabel = UILabel()
+    private let wordLabel = UILabel()
+    private let counterLabel = UILabel()
+    private var correctAnswerCounter = 0
+    private var wrongAnswerCounter = 0
+    
+    private let button1 = UIButton()
+    private let button2 = UIButton()
+    private let button3 = UIButton()
+    private let button4 = UIButton()
+    
+    private var questionArray = [WordModel]() {
         didSet {
-            counterLabel.text = "question: \(answersArray.count)/\(currentQuestion)"
+            counterLabel.text = "\(currentQuestion) of \(answersArray.count)"
             currentQuestion += 1
         }
     }
-    var answersArray = [WordModel]()
-
-    var currentWord = WordModel(word: "", translation: "")
-    var correctAnswer = ""
-    var currentQuestion = 0
+    private var answersArray = [WordModel]()
+    
+    private var currentWord = WordModel()
+    private var correctAnswer = ""
+    private var currentQuestion = 0
+    
+    //MARK: - methods
     
     override func viewDidLoad() {
         super.viewDidLoad()
-
-//        navigationController?.navigationBar.isHidden = true
+        
         view.backgroundColor = .systemBackground
         tabBarController?.tabBar.isHidden = true
         
-        let dictionary = dictionaryModel.vocabulary
         var learningList = [WordModel]()
         
-        for list in dictionary {
-            learningList.append(contentsOf: list.words)
+        if UserDefaults.standard.integer(forKey: "wordsQty") != 0 {
+        wordsInTest = UserDefaults.standard.integer(forKey: "wordsQty")
+        } else {
+            wordsInTest = 10
         }
         
-        //add sort method by exp property
+        guard let dict = dictionary else { return }
         
-        questionArray = learningList
+        for list in dict {
+            
+            guard let words = list.words?.allObjects as? [WordModel] else { continue }
+            
+            learningList.append(contentsOf: words)
+        }
+        
+        selectWords(words: learningList)
+        
         answersArray = questionArray
         
         configureView()
@@ -62,18 +77,52 @@ class GIStartTestVC: UIViewController {
         tabBarController?.tabBar.isHidden = false
     }
     
-    func startConfig() {
+    private func selectWords(words: [WordModel]) {
+        
+        let sortedByExp = words.sorted(by: { (current, next) -> Bool in
+            if current.exp > next.exp {
+                return true
+            } else {
+                return false
+            }
+        })
+        
+        //TODO: add a line below after adding settings property of words in test
+        
+        questionArray = Array(sortedByExp.prefix(wordsInTest))
+        
+    }
+    
+    private func startConfig() {
+        
+        //FIXME: Words selection working wrong
         
         let randomCurrentIndex = Int.random(in: 0..<questionArray.count)
         currentWord = questionArray[randomCurrentIndex]
         questionArray.remove(at: randomCurrentIndex)
-        correctAnswer = currentWord.translation
-        wordLabel.text = currentWord.word.uppercased()
         
+        guard let translation = currentWord.translation else {
+            print("\(currentWord) have no translation")
+            return
+        }
+        correctAnswer = translation
+        
+        guard let word = currentWord.word?.uppercased() else {
+            print("\(currentWord) have no word")
+            return
+        }
+        wordLabel.text = word
+
         var allAnswers = answersArray
-        allAnswers.remove(at: randomCurrentIndex)
-        var answers = [WordModel]()
         
+        guard let ind = allAnswers.firstIndex(where: {$0.translation == correctAnswer}) else {
+            print("ind error")
+            return
+        }
+        allAnswers.remove(at: ind)
+        
+        var answers = [WordModel]()
+
         for _ in 1...3 {
             let randomIndex = Int.random(in: 0..<allAnswers.count)
             let answerOption = allAnswers[randomIndex]
@@ -87,11 +136,83 @@ class GIStartTestVC: UIViewController {
         
         for (index, button) in buttons.enumerated() {
             button.setTitle(answers[index].translation, for: .normal)
+            button.isEnabled = true
         }
-        
     }
-
-    func configureView() {
+    
+    @objc private func buttonPressed(sender: UIButton) {
+        
+        if sender.titleLabel?.text == correctAnswer {
+            button1.isEnabled = false
+            button2.isEnabled = false
+            button3.isEnabled = false
+            button4.isEnabled = false
+            correctAnswerCounter += 1
+            sender.backgroundColor = .systemGreen
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                sender.backgroundColor = .systemYellow
+                if self.questionArray.isEmpty {
+                    
+                        self.presentAlertController()
+                    } else {
+                        UIView.animate(withDuration: 0.5) {
+                        self.testView.layer.transform = CATransform3DMakeRotation(360, 0, 1, 0)
+                        self.testView.transform = .identity
+                    }
+                        self.startConfig()
+                }
+            }
+            
+            currentWord.exp += 72
+            
+        } else {
+            button1.isEnabled = false
+            button2.isEnabled = false
+            button3.isEnabled = false
+            button4.isEnabled = false
+            wrongAnswerCounter += 1
+            sender.backgroundColor = .systemRed
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                sender.backgroundColor = .systemYellow
+                UIView.animate(withDuration: 0.5) {
+                    
+                    self.testView.layer.transform = CATransform3DMakeRotation(360, 0, 1, 0)
+                    self.testView.transform = .identity
+                    
+                    if self.questionArray.isEmpty {
+                        
+                        self.presentAlertController()
+                    } else {
+                            self.startConfig()
+                    }
+                }
+            }
+            currentWord.exp -= 30
+        }
+        DispatchQueue.main.async {
+            
+            guard let cont = self.container else { return }
+            
+            do {
+                try cont.viewContext.save()
+            } catch {
+                print("saving container error - StartTestVC")
+            }
+        }
+    }
+    
+    private func presentAlertController() {
+        
+        let message = "Your result:\n \(correctAnswerCounter) correct answers\n \(wrongAnswerCounter) wrong answers"
+        let ac = UIAlertController(title: "Test Finished", message: message , preferredStyle: .alert)
+        ac.addAction(UIAlertAction(title: "OK", style: .default, handler: { (_) in
+            self.navigationController?.popViewController(animated: true)
+            self.dismiss(animated: true, completion: nil)
+        }))
+        present(ac, animated: true, completion: nil)
+    }
+    
+    private func configureView() {
         view.addSubview(testView)
         
         testView.backgroundColor = .systemGray3
@@ -105,8 +226,7 @@ class GIStartTestVC: UIViewController {
         
         questionView.backgroundColor = .systemYellow
         questionView.layer.cornerRadius = 10
-//        labelView.layer.masksToBounds = true
-
+        
         questionView.layer.borderWidth = 2
         questionView.layer.borderColor = UIColor.black.cgColor
         questionView.addSubview(questionLabel)
@@ -116,15 +236,12 @@ class GIStartTestVC: UIViewController {
         
         questionLabel.text = "How would you translate:"
         questionLabel.textColor = .black
-//        questionLabel.backgroundColor = .green
         questionLabel.numberOfLines = 0
         questionLabel.font = .boldSystemFont(ofSize: 23)
         questionLabel.textAlignment = .center
         questionLabel.translatesAutoresizingMaskIntoConstraints = false
         
-//        wordLabel.text = "\(questionArray.randomElement()?.word.uppercased() ?? "nil")"
         wordLabel.textColor = .black
-//        wordLabel.backgroundColor = .green
         wordLabel.numberOfLines = 0
         wordLabel.font = .boldSystemFont(ofSize: 23)
         wordLabel.textAlignment = .center
@@ -132,7 +249,6 @@ class GIStartTestVC: UIViewController {
         
         counterLabel.text = "-/-"
         counterLabel.textColor = .black
-//        counterLabel.backgroundColor = .green
         counterLabel.numberOfLines = 0
         counterLabel.font = .boldSystemFont(ofSize: 23)
         counterLabel.textAlignment = .center
@@ -173,13 +289,13 @@ class GIStartTestVC: UIViewController {
         button4.layer.borderColor = UIColor.black.cgColor
         button4.translatesAutoresizingMaskIntoConstraints = false
         button4.addTarget(self, action: #selector(buttonPressed), for: .touchUpInside)
-    
+        
         NSLayoutConstraint.activate([
             testView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             testView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
             testView.heightAnchor.constraint(equalToConstant: 500),
             testView.widthAnchor.constraint(equalToConstant: 350),
-        
+            
             questionView.centerXAnchor.constraint(equalTo: testView.centerXAnchor),
             questionView.topAnchor.constraint(equalTo: testView.topAnchor, constant: 50),
             questionView.widthAnchor.constraint(equalToConstant: 300),
@@ -220,43 +336,5 @@ class GIStartTestVC: UIViewController {
             counterLabel.trailingAnchor.constraint(equalTo: questionView.trailingAnchor),
             counterLabel.bottomAnchor.constraint(equalTo: testView.bottomAnchor)
         ])
-    }
-    
-    @objc func buttonPressed(sender: UIButton) {
-        
-        if sender.titleLabel?.text == correctAnswer {
-
-            sender.backgroundColor = .systemGreen
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                sender.backgroundColor = .systemYellow
-                UIView.animate(withDuration: 0.5) {
-                    
-                    self.testView.transform = CGAffineTransform(scaleX: 1.5, y: 1.5)
-                    self.testView.transform = .identity
-                }
-            }
-            
-            currentWord.exp += 72
-            
-        } else {
-            sender.backgroundColor = .systemRed
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                sender.backgroundColor = .systemYellow
-                UIView.animate(withDuration: 0.5) {
-                    
-                    self.testView.transform = CGAffineTransform(rotationAngle: CGFloat.pi)
-                    self.testView.transform = .identity
-                }
-            }
-        }
-        
-        if questionArray.isEmpty {
-            //TODO: change that dismiss to show some result view
-            
-            navigationController?.popViewController(animated: true)
-            dismiss(animated: true, completion: nil)
-        } else {
-            startConfig()
-        }
     }
 }

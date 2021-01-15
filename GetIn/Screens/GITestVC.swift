@@ -6,62 +6,97 @@
 //
 
 import UIKit
+import CoreData
 
-class GITestVC: UIViewController, UITableViewDataSource, UITableViewDelegate {
-
-    var dictionaryModel = DictionaryModel()
+class GITestVC: UIViewController {
     
-    let tableView = UITableView()
-    let options = ["Test Over All Lists", "Pick A List"]
+    var container : NSPersistentContainer?
+    private var dictionary: [ListModel]?
 
+    private let options = ["Test Over All Lists", "Pick A List"]
+    private let allButton = GIButton(backgroundColor: .systemGreen, title: "Test Over All Lists")
+    private let pickButton = GIButton(backgroundColor: .systemGreen, title: "Pick A List")
+    
+//MARK: - Methods
+    
     override func viewDidLoad() {
         super.viewDidLoad()
-
-        view.backgroundColor = .systemPink
-        navigationController?.navigationBar.prefersLargeTitles = true
-        navigationItem.backBarButtonItem = UIBarButtonItem(title: "Finish Test", style: .plain, target: nil, action: nil)
-        navigationController?.navigationBar.tintColor = .black
-        configureTableview()
-    }
-    
-
-    func configureTableview() {
-        tableView.frame = view.bounds
-        tableView.rowHeight = 80
-        tableView.dataSource = self
-        tableView.delegate = self
-        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
-        view.addSubview(tableView)
-    }
-
-    
-    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return options.count
-    }
-    
-    
-    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
         
-        cell.accessoryType = .disclosureIndicator
-        cell.textLabel?.text = options[indexPath.row]
-        return cell
+        view.backgroundColor = .secondarySystemBackground
+        navigationController?.navigationBar.isHidden = true
+        navigationItem.backBarButtonItem = UIBarButtonItem(title: "Back To Options", style: .plain, target: nil, action: nil)
+        navigationController?.navigationBar.tintColor = .systemGreen
+        
+        configureButtons()
     }
     
+    override func viewWillAppear(_ animated: Bool) {
+        fetchData()
+    }
     
-    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        if options[indexPath.row] == options[0] {
+    func configureButtons() {
+        view.addSubview(allButton)
+        view.addSubview(pickButton)
+        
+        allButton.addTarget(self, action: #selector(startTest), for: .touchUpInside)
+        pickButton.addTarget(self, action: #selector(pickList), for: .touchUpInside)
+        
+        NSLayoutConstraint.activate([
+            allButton.topAnchor.constraint(equalTo: view.topAnchor, constant: 300),
+            allButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            allButton.widthAnchor.constraint(equalToConstant: 250),
+            allButton.heightAnchor.constraint(equalToConstant: 80),
             
-            let vc = GIStartTestVC()
-            vc.dictionaryModel = dictionaryModel
-            navigationController?.pushViewController(vc, animated: true)
-
-        } else {
-            let choiceVC = GIListPickerVC()
-            navigationController?.pushViewController(choiceVC, animated: true)
-            choiceVC.dictionaryModel = dictionaryModel
-        }
-        tableView.deselectRow(at: indexPath, animated: true)
+            pickButton.topAnchor.constraint(equalTo: allButton.bottomAnchor, constant: 50),
+            pickButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            pickButton.widthAnchor.constraint(equalToConstant: 250),
+            pickButton.heightAnchor.constraint(equalToConstant: 80)
+        ])
     }
     
+    
+    @objc func startTest() {
+        
+        var count = 0
+        
+        guard let dict = dictionary else { return }
+        
+        for index in 0..<dict.count {
+            
+            if let words = dict[index].words {
+                count += words.count
+            }
+        }
+        
+        if count > 9 {
+            let vc = GIStartTestVC()
+            vc.dictionary = dict
+            vc.container = container
+            navigationController?.pushViewController(vc, animated: true)
+        } else {
+            let ac = UIAlertController(title: "Add some words first", message: "You need to have at least 10 words in your lists to start test", preferredStyle: .alert)
+            ac.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
+            present(ac, animated: true, completion: nil)
+        }
+    }
+    
+    
+    @objc func pickList() {
+        let choiceVC = GIListPickerVC()
+        navigationController?.pushViewController(choiceVC, animated: true)
+        guard let dict = dictionary else { return }
+        choiceVC.dictionary = dict
+    }
+    
+    private func fetchData() {
+        
+        guard let cont = container else { return }
+        
+        do {
+            self.dictionary = try cont.viewContext.fetch(ListModel.fetchRequest())
+            
+        } catch {
+            print("fetchData fail: GITestVC")
+        }
+    }
 }

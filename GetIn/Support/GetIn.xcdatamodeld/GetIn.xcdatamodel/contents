@@ -1,4 +1,17 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="17511" systemVersion="20B29" minimumToolsVersion="Automatic" sourceLanguage="Swift" userDefinedModelVersionIdentifier="">
-    <elements/>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="17709" systemVersion="19H114" minimumToolsVersion="Automatic" sourceLanguage="Swift" userDefinedModelVersionIdentifier="">
+    <entity name="ListModel" representedClassName="ListModel" syncable="YES">
+        <attribute name="title" optional="YES" attributeType="String"/>
+        <relationship name="words" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="WordModel" inverseName="inList" inverseEntity="WordModel"/>
+    </entity>
+    <entity name="WordModel" representedClassName="WordModel" syncable="YES">
+        <attribute name="exp" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="translation" optional="YES" attributeType="String"/>
+        <attribute name="word" optional="YES" attributeType="String"/>
+        <relationship name="inList" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="ListModel" inverseName="words" inverseEntity="ListModel"/>
+    </entity>
+    <elements>
+        <element name="ListModel" positionX="-806.04296875" positionY="-35.4140625" width="128" height="73"/>
+        <element name="WordModel" positionX="-1069.0625" positionY="10.33203125" width="128" height="103"/>
+    </elements>
 </model>

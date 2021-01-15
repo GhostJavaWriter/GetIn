@@ -7,37 +7,70 @@
 
 import UIKit
 
-class GIListPickerVC: UIViewController, UITableViewDelegate, UITableViewDataSource {
+class GIListPickerVC: UIViewController {
     
-    var dictionaryModel = DictionaryModel()
+    var dictionary : [ListModel]?
+    private var customDict : [ListModel]?
     
-    let tableView = UITableView()
-    var lists: [List] = []
+    private let tableView = UITableView()
     
-    var list1 = List(title: "list 1")
-    var list2 = List(title: "list 2")
+    //MARK: - Methods
     
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        lists = [list1, list2]
-        
         title = "Pick Lists"
-        navigationController?.navigationBar.tintColor = .black
+        navigationController?.navigationBar.tintColor = .systemGreen
+        navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.backBarButtonItem = UIBarButtonItem(title: "Finish Test", style: .plain, target: nil, action: nil)
+        
         view.backgroundColor = .systemGray2
         navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Start Test", style: .plain, target: self, action: #selector(start))
+        navigationItem.rightBarButtonItem?.isEnabled = false
+        
+        customDict = []
+        
         configureTableView()
     }
     
+    override func viewWillAppear(_ animated: Bool) {
+        
+        navigationController?.navigationBar.isHidden = false
+
+    }
     
-    @objc func start() {
-        let vc = GIStartTestVC()
-        navigationController?.pushViewController(vc, animated: true)
+    override func viewWillDisappear(_ animated: Bool) {
+        navigationController?.navigationBar.isHidden = true
+    }
+    
+    @objc private func start() {
+        
+        //FIXME: check words count. If count less than 10 do not start the test
+        guard let dict = customDict else { return }
+        var counter = 0
+        for list in dict {
+            counter += list.words!.count
+        }
+
+        if counter > 9 {
+            
+            let vc = GIStartTestVC()
+            vc.dictionary = customDict
+            navigationController?.pushViewController(vc, animated: true)
+            for list in dict {
+                list.selected = false
+            }
+        } else {
+            let ac = UIAlertController(title: "Add some words first", message: "You need to have at least 10 words in your lists to start test", preferredStyle: .alert)
+            ac.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
+            present(ac, animated: true, completion: nil)
+        }
+
+        
     }
     
     
-    func configureTableView() {
+    private func configureTableView() {
         tableView.frame = view.bounds
         tableView.rowHeight = 80
         tableView.delegate = self
@@ -47,29 +80,51 @@ class GIListPickerVC: UIViewController, UITableViewDelegate, UITableViewDataSour
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
     }
     
+}
+
+extension GIListPickerVC : UITableViewDelegate, UITableViewDataSource {
     
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return lists.count
+        
+        guard let dict = dictionary else { return 0 }
+        
+        return dict.count
     }
     
-    
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell =
-            tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
-        cell.textLabel?.text = lists[indexPath.row].title
+        
+        let listRowAt = dictionary?[indexPath.row]
+        
+        let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
+        cell.textLabel?.text = listRowAt?.title
         cell.tintColor = .black
-        if lists[indexPath.row].selected == true {
+        
+        if listRowAt?.selected == true {
             cell.accessoryType = .checkmark
         } else {
             cell.accessoryType = .none
         }
+        
         return cell
     }
     
-    
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        lists[indexPath.row].selected.toggle()
+        dictionary?[indexPath.row].selected.toggle()
+        
+        guard let dict = dictionary else { return }
+        
+            if dict[indexPath.row].selected {
+                customDict?.append(dict[indexPath.row])
+            } else {
+                customDict?.removeAll { $0.title == dict[indexPath.row].title }
+            }
+        
+        if customDict?.count != 0 {
+            navigationItem.rightBarButtonItem?.isEnabled = true
+        } else {
+            navigationItem.rightBarButtonItem?.isEnabled = false
+        }
         tableView.reloadData()
+        
     }
-    
 }
